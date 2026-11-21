@@ -1,7 +1,9 @@
 // news-image-20261121 — entrypoint (node22, stdlib only).
-// Copies entry.png into the grader's output directory and verifies the copy
-// is byte-for-byte identical in size; fails loudly on any mismatch.
-import { copyFileSync, mkdirSync, statSync } from "node:fs";
+// Copies entry.png into the grader's output directory and verifies each copy
+// is byte-for-byte identical (SHA-256 of source vs destination); fails
+// loudly on any mismatch, so a truncated or corrupted copy never passes.
+import { copyFileSync, mkdirSync, readFileSync, statSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -18,14 +20,17 @@ const targets = [
   join(outDir, "output", "entry.png"),
 ];
 
+const sha256 = (path) => createHash("sha256").update(readFileSync(path)).digest("hex");
 const srcSize = statSync(src).size;
+const srcHash = sha256(src);
 for (const dest of targets) {
   mkdirSync(dirname(dest), { recursive: true });
   copyFileSync(src, dest);
   const destSize = statSync(dest).size;
-  if (destSize !== srcSize) {
-    console.error(`size mismatch: ${src} is ${srcSize} bytes but ${dest} is ${destSize} bytes`);
+  const destHash = sha256(dest);
+  if (destSize !== srcSize || destHash !== srcHash) {
+    console.error(`copy mismatch: ${src} is ${srcSize} bytes sha256 ${srcHash} but ${dest} is ${destSize} bytes sha256 ${destHash}`);
     process.exit(1);
   }
-  console.log(`copied entry.png (${srcSize} bytes) to ${dest}`);
+  console.log(`copied entry.png (${srcSize} bytes, sha256 ${srcHash}) to ${dest}`);
 }
